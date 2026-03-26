@@ -1,3 +1,4 @@
+# === Training (Windows/Desktop with AMD GPU) ===
 torch>=2.0
 torchvision>=0.15
 onnxruntime-directml>=1.15
@@ -5,3 +6,11 @@ numpy>=1.21
 Pillow>=9.0
 scikit-learn>=1.0
 opencv-python>=4.5
+
+# === Raspberry Pi Deployment (inference only) ===
+# Install these on the Pi instead of the training dependencies above:
+#   pip install onnxruntime numpy Pillow
+#
+# Note: Do NOT install onnxruntime-directml on Pi (DirectML is Windows/AMD only).
+#       The regular 'onnxruntime' package works on ARM and uses CPUExecutionProvider.
+#       torch/torchvision are NOT needed on Pi — inference uses ONNX Runtime only.
