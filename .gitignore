@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Model artifacts (too large for git - store separately)
+*.onnx
+*.pth
+*.pt
+*.h5
+
+# Dataset directories (store on external drive)
+Training_Ready/
+By_Disease/
+Organized/
+Downloads/
+Models/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment
+.env
+.venv/
+venv/
