@@ -44,7 +44,12 @@ DISEASE_CLASSES = {
 }
 
 # Subfolders to collect classification images from
-CLASSIFICATION_SOURCES = ["classification", "classification_csv"]
+CLASSIFICATION_SOURCES = [
+    "classification", "classification_csv",
+    "classification_new",
+    "classification_kaggle", "classification_gdrive",
+    "classification_merged", "classification_dentalai",
+]
 
 # Segmentation class map for cropping (pixel value -> disease folder)
 SEG_CRACK_VALUE = 3  # Crack class in segmentation masks
