@@ -16,6 +16,8 @@ Usage:
 import argparse
 import json
 import os
+import subprocess
+import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -53,6 +55,8 @@ def get_args():
                         help="DataLoader workers")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to checkpoint to resume from")
+    parser.add_argument("--gui", action="store_true",
+                        help="Launch the training monitor GUI automatically")
     return parser.parse_args()
 
 
@@ -268,6 +272,14 @@ def main():
     device = get_device()
     print(f"Batch size: {args.batch_size}, Workers: {args.workers}")
 
+    # Launch training monitor GUI if requested
+    if args.gui:
+        monitor_script = Path(__file__).parent / "training_monitor.py"
+        if monitor_script.exists():
+            subprocess.Popen([sys.executable, str(monitor_script)],
+                             creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0))
+            print("Training monitor GUI launched.")
+
     # Load datasets
     train_transform, eval_transform = get_transforms()
 
@@ -327,21 +339,26 @@ def main():
 
     # Live progress file for training_monitor.py GUI
     progress_path = MODEL_DIR / "training_progress.json"
-    progress_data = {
-        "model": "EfficientNet-B0",
-        "dataset_size": len(train_dataset) + len(val_dataset) + len(test_dataset),
-        "total_epochs": total_epochs,
-        "epochs_frozen": args.epochs_frozen,
-        "best_val_acc": 0.0,
-        "best_epoch": 0,
-        "status": "training",
-        "epochs": [],
-    }
+    progress_epochs: list[dict[str, object]] = []
+    progress_status = "training"
+    progress_test_acc = 0.0
 
     def save_progress():
+        data = {
+            "model": "EfficientNet-B0",
+            "dataset_size": len(train_dataset) + len(val_dataset) + len(test_dataset),
+            "total_epochs": total_epochs,
+            "epochs_frozen": args.epochs_frozen,
+            "best_val_acc": round(best_val_acc, 1),
+            "best_epoch": best_epoch,
+            "status": progress_status,
+            "epochs": progress_epochs,
+        }
+        if progress_status == "completed":
+            data["test_accuracy"] = round(progress_test_acc, 1)
         try:
             with open(progress_path, "w") as pf:
-                json.dump(progress_data, pf, indent=2)
+                json.dump(data, pf, indent=2)
         except IOError:
             pass
 
@@ -393,15 +410,13 @@ def main():
             print(f"  -> New best model saved! (Val Acc: {val_acc:.1f}%)")
 
         # Update live progress
-        progress_data["epochs"].append({
+        progress_epochs.append({
             "epoch": epoch, "phase": "head",
             "train_loss": round(train_loss, 4),
             "train_acc": round(train_acc, 1),
             "val_loss": round(val_loss, 4),
             "val_acc": round(val_acc, 1),
         })
-        progress_data["best_val_acc"] = round(best_val_acc, 1)
-        progress_data["best_epoch"] = best_epoch
         save_progress()
 
     # ── Phase 2: Fine-tune full model ──────────────────────────────────
@@ -450,20 +465,18 @@ def main():
             patience_counter += 1
             if patience_counter >= args.patience:
                 print(f"\n  Early stopping triggered after {args.patience} epochs without improvement")
-                progress_data["status"] = "early_stopped"
+                progress_status = "early_stopped"
                 save_progress()
                 break
 
         # Update live progress
-        progress_data["epochs"].append({
+        progress_epochs.append({
             "epoch": epoch, "phase": "finetune",
             "train_loss": round(train_loss, 4),
             "train_acc": round(train_acc, 1),
             "val_loss": round(val_loss, 4),
             "val_acc": round(val_acc, 1),
         })
-        progress_data["best_val_acc"] = round(best_val_acc, 1)
-        progress_data["best_epoch"] = best_epoch
         save_progress()
 
     # ── Evaluation on test set ─────────────────────────────────────────
@@ -517,8 +530,8 @@ def main():
     print(f"\nEvaluation report saved to: {report_path}")
 
     # Update progress as completed
-    progress_data["status"] = "completed"
-    progress_data["test_accuracy"] = round(test_acc, 1)
+    progress_status = "completed"
+    progress_test_acc = test_acc
     save_progress()
 
     # Save training history
