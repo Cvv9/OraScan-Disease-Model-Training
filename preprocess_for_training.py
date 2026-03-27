@@ -49,6 +49,7 @@ CLASSIFICATION_SOURCES = [
     "classification_new",
     "classification_kaggle", "classification_gdrive",
     "classification_merged", "classification_dentalai",
+    "classification_augmented",
 ]
 
 # Segmentation class map for cropping (pixel value -> disease folder)
