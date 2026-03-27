@@ -207,10 +207,12 @@ def evaluate(model, loader, criterion, device):
 
 def export_onnx(model, num_classes, class_names, device):
     """Export model to ONNX for DirectML inference."""
+    # ONNX export requires CPU
+    model = model.to("cpu")
     model.eval()
     onnx_path = MODEL_DIR / "dental_classifier.onnx"
 
-    dummy_input = torch.randn(1, 3, IMG_SIZE, IMG_SIZE).to(device)
+    dummy_input = torch.randn(1, 3, IMG_SIZE, IMG_SIZE)
     torch.onnx.export(
         model,
         dummy_input,
@@ -244,10 +246,26 @@ def export_onnx(model, num_classes, class_names, device):
     return onnx_path
 
 
+def get_device():
+    """Select best available device: DirectML (AMD GPU) > CUDA > CPU."""
+    try:
+        import torch_directml
+        device = torch_directml.device()
+        name = torch_directml.device_name(0)
+        print(f"Using DirectML device: {name}")
+        return device
+    except ImportError:
+        pass
+    if torch.cuda.is_available():
+        print(f"Using CUDA device: {torch.cuda.get_device_name(0)}")
+        return torch.device("cuda")
+    print("Using device: cpu")
+    return torch.device("cpu")
+
+
 def main():
     args = get_args()
-    device = torch.device("cpu")
-    print(f"Using device: {device}")
+    device = get_device()
     print(f"Batch size: {args.batch_size}, Workers: {args.workers}")
 
     # Load datasets
@@ -453,9 +471,10 @@ def main():
     print("Evaluating best model on test set")
     print("=" * 70)
 
-    # Load best model
-    checkpoint = torch.load(MODEL_DIR / "best_model.pth", weights_only=False)
+    # Load best model (map to CPU first, then move to device)
+    checkpoint = torch.load(MODEL_DIR / "best_model.pth", weights_only=False, map_location="cpu")
     model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device)
     print(f"Loaded best model from epoch {checkpoint['epoch']} (Val Acc: {checkpoint['val_acc']:.1f}%)")
 
     test_loss, test_acc, test_preds, test_targets = evaluate(
