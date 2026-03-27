@@ -307,6 +307,26 @@ def main():
     best_epoch = 0
     history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
 
+    # Live progress file for training_monitor.py GUI
+    progress_path = MODEL_DIR / "training_progress.json"
+    progress_data = {
+        "model": "EfficientNet-B0",
+        "dataset_size": len(train_dataset) + len(val_dataset) + len(test_dataset),
+        "total_epochs": total_epochs,
+        "epochs_frozen": args.epochs_frozen,
+        "best_val_acc": 0.0,
+        "best_epoch": 0,
+        "status": "training",
+        "epochs": [],
+    }
+
+    def save_progress():
+        try:
+            with open(progress_path, "w") as pf:
+                json.dump(progress_data, pf, indent=2)
+        except IOError:
+            pass
+
     total_epochs = args.epochs_frozen + args.epochs_finetune
 
     # ── Phase 1: Train classifier head only ────────────────────────────
@@ -354,6 +374,18 @@ def main():
             }, MODEL_DIR / "best_model.pth")
             print(f"  -> New best model saved! (Val Acc: {val_acc:.1f}%)")
 
+        # Update live progress
+        progress_data["epochs"].append({
+            "epoch": epoch, "phase": "head",
+            "train_loss": round(train_loss, 4),
+            "train_acc": round(train_acc, 1),
+            "val_loss": round(val_loss, 4),
+            "val_acc": round(val_acc, 1),
+        })
+        progress_data["best_val_acc"] = round(best_val_acc, 1)
+        progress_data["best_epoch"] = best_epoch
+        save_progress()
+
     # ── Phase 2: Fine-tune full model ──────────────────────────────────
     print("\n" + "=" * 70)
     print(f"Phase 2: Fine-tuning full model ({args.epochs_finetune} epochs)")
@@ -400,7 +432,21 @@ def main():
             patience_counter += 1
             if patience_counter >= args.patience:
                 print(f"\n  Early stopping triggered after {args.patience} epochs without improvement")
+                progress_data["status"] = "early_stopped"
+                save_progress()
                 break
+
+        # Update live progress
+        progress_data["epochs"].append({
+            "epoch": epoch, "phase": "finetune",
+            "train_loss": round(train_loss, 4),
+            "train_acc": round(train_acc, 1),
+            "val_loss": round(val_loss, 4),
+            "val_acc": round(val_acc, 1),
+        })
+        progress_data["best_val_acc"] = round(best_val_acc, 1)
+        progress_data["best_epoch"] = best_epoch
+        save_progress()
 
     # ── Evaluation on test set ─────────────────────────────────────────
     print("\n" + "=" * 70)
@@ -450,6 +496,11 @@ def main():
                     f"val_loss={vl:.4f}, val_acc={va:.1f}%\n")
 
     print(f"\nEvaluation report saved to: {report_path}")
+
+    # Update progress as completed
+    progress_data["status"] = "completed"
+    progress_data["test_accuracy"] = round(test_acc, 1)
+    save_progress()
 
     # Save training history
     history_path = MODEL_DIR / "training_history.json"
